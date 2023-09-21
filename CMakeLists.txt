@@ -1,83 +1,117 @@
-cmake_minimum_required(VERSION 3.0.2)
+cmake_minimum_required(VERSION 3.5)
 project(rviz_camera_stream)
 
-find_package(catkin REQUIRED COMPONENTS
-  image_transport
-  roscpp
-  roslint
-  rviz
-  sensor_msgs
-)
-
-roslint_cpp()
-## Compiler flags
-# if(CMAKE_COMPILER_IS_GNUCXX)
-#  set(CMAKE_CXX_FLAGS "-std=c++0x")  ## Enable C++11
-# endif()
-# set(CMAKE_CXX_FLAGS "-Wall -Werror ${CMAKE_CXX_FLAGS}")
-set(CMAKE_CXX_FLAGS "-Wall ${CMAKE_CXX_FLAGS}")
-
-## This plugin includes Qt widgets, so we must include Qt.
-## We'll use the version that rviz used so they are compatible.
-if(rviz_QT_VERSION VERSION_LESS "5")
-  message(STATUS "Using Qt4 based on the rviz_QT_VERSION: ${rviz_QT_VERSION}")
-  find_package(Qt4 ${rviz_QT_VERSION} EXACT REQUIRED QtCore QtGui)
-  ## pull in all required include dirs, define QT_LIBRARIES, etc.
-  include(${QT_USE_FILE})
-else()
-  message(STATUS "Using Qt5 based on the rviz_QT_VERSION: ${rviz_QT_VERSION}")
-  # find_package(Qt5 ${rviz_QT_VERSION} EXACT REQUIRED Core Widgets)
-  find_package(Qt5 ${rviz_QT_VERSION} REQUIRED Core Widgets)
-  ## make target_link_libraries(${QT_LIBRARIES}) pull in all required dependencies
-  set(QT_LIBRARIES Qt5::Widgets)
+# Default to C99
+if(NOT CMAKE_C_STANDARD)
+  set(CMAKE_C_STANDARD 99)
 endif()
 
-## Avoid defining "emit", "slots",
-## etc for Qt signals because they can conflict with boost signals
-add_definitions(-DQT_NO_KEYWORDS)
+# Default to C++17
+if(NOT CMAKE_CXX_STANDARD)
+  set(CMAKE_CXX_STANDARD 17)
+endif()
 
-catkin_package(
-  CATKIN_DEPENDS
-  roscpp
-  rviz
-)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  add_compile_options(-Wall -Wextra -Wpedantic -Wno-error=deprecated-declarations)
+endif()
+
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
+#dependencies
+find_package(Boost REQUIRED thread)
+find_package(ament_cmake REQUIRED)
+find_package(Qt5 REQUIRED COMPONENTS Core Widgets)
+find_package(rclcpp REQUIRED)
+find_package(image_transport REQUIRED)
+find_package(std_srvs REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(rviz_rendering REQUIRED)
+find_package(rviz_ogre_vendor REQUIRED)
+find_package(rviz_common REQUIRED)
+find_package(rviz_default_plugins REQUIRED)
+
+qt5_wrap_cpp(${PROJECT_NAME}_mocs include/${PROJECT_NAME}/camera_display.h)
 
 include_directories(
   include
-  ${catkin_INCLUDE_DIRS}
 )
 
-if(rviz_QT_VERSION VERSION_LESS "5")
-  qt4_wrap_cpp(MOC_FILES
-    include/${PROJECT_NAME}/camera_display.h
-  )
-else()
-  qt5_wrap_cpp(MOC_FILES
-    include/${PROJECT_NAME}/camera_display.h
-  )
-endif()
-
-add_library(${PROJECT_NAME}
+add_library(${PROJECT_NAME} SHARED
   src/camera_display.cpp
-  ${MOC_FILES}
+  ${${PROJECT_NAME}_mocs}
 )
 
-target_link_libraries(${PROJECT_NAME}
-  ${catkin_LIBRARIES}
-  ${QT_LIBRARIES}
+target_include_directories(${PROJECT_NAME} PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include/${PROJECT_NAME}>
+  ${Qt5Widgets_INCLUDE_DIRS}
 )
 
-# install
-install (TARGETS ${PROJECT_NAME}
-  ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-  LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-  RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+# target_link_libraries(${PROJECT_NAME} PUBLIC
+
+# )
+
+ament_target_dependencies(${PROJECT_NAME}
+  Boost
+  rclcpp
+  image_transport
+  sensor_msgs
+  std_srvs
+  rviz_rendering
+  rviz_ogre_vendor
+  rviz_common
+  rviz_default_plugins
 )
 
-install(FILES
-  plugin_description.xml
-  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
+pluginlib_export_plugin_description_file(rviz_common plugin_description.xml)
+
+ament_export_dependencies(
+  Boost
+  rclcpp
+  image_transport
+  sensor_msgs
+  std_srvs
+  rviz_rendering
+  rviz_ogre_vendor
+  rviz_common
+  rviz_default_plugins
 )
 
-install(DIRECTORY config/ DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/config)
-install(DIRECTORY launch/ DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/launch)
+ament_export_include_directories(
+  include
+)
+
+ament_export_libraries(
+  ${PROJECT_NAME}
+)
+
+ament_export_targets(
+  export_${PROJECT_NAME}
+)
+
+install(
+  TARGETS ${PROJECT_NAME}
+  EXPORT export_${PROJECT_NAME}
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION bin
+)
+
+install(
+  DIRECTORY include/
+  DESTINATION include
+)
+
+install(DIRECTORY
+  launch
+  DESTINATION share/${PROJECT_NAME}/
+)
+
+install(DIRECTORY
+  config
+  DESTINATION share/${PROJECT_NAME}/
+)
+
+ament_package()

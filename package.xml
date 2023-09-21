@@ -1,4 +1,4 @@
-<package>
+<package format="3">
   <name>rviz_camera_stream</name>
   <version>1.0.1</version>
   <description>
@@ -10,20 +10,30 @@
 
   <license>BSD</license>
 
-  <url type="website">https://github.com/lucasw/rviz_camera_stream</url>
-
-  <buildtool_depend>catkin</buildtool_depend>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <build_depend>qtbase5-dev</build_depend>
   <build_depend>image_transport</build_depend>
-  <build_depend>roscpp</build_depend>
+  <build_depend>rclcpp</build_depend>
   <build_depend>roslint</build_depend>
-  <build_depend>rviz</build_depend>
+  <build_depend>std_srvs</build_depend>
   <build_depend>sensor_msgs</build_depend>
 
-  <run_depend>roscpp</run_depend>
-  <run_depend>rviz</run_depend>
-  <run_depend>tf</run_depend>
+  <exec_depend>libqt5-core</exec_depend>
+  <exec_depend>libqt5-gui</exec_depend>
+  <exec_depend>libqt5-opengl</exec_depend>
+  <exec_depend>libqt5-widgets</exec_depend>
+  <exec_depend>rviz_ogre_vendor</exec_depend>
+  <exec_depend>rclcpp</exec_depend>
+  <exec_depend>tf</exec_depend>
+
+  <depend>rviz2</depend>
+  <depend>rviz_common</depend>
+  <depend>rviz_default_plugins</depend>
+
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
 
   <export>
-      <rviz plugin="${prefix}/plugin_description.xml"/>
+    <build_type>ament_cmake</build_type>
   </export>
 </package>

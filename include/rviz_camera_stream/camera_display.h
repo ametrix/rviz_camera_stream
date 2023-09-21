@@ -32,6 +32,7 @@
 
 #include <QObject>
 #include <string>
+#include <boost/thread/mutex.hpp>
 
 #ifndef Q_MOC_RUN
 #include <OgreMaterial.h>
@@ -39,10 +40,9 @@
 #include <OgreSharedPtr.h>
 #include <OgreTexture.h>
 
-# include <sensor_msgs/CameraInfo.h>
-
-# include "rviz/image/image_display_base.h"
-#include <std_srvs/Trigger.h>
+#include <sensor_msgs/msg/camera_info.hpp>
+#include <rviz_default_plugins/displays/image/image_display.hpp>
+#include <std_srvs/srv/trigger.hpp>
 #endif
 
 namespace Ogre
@@ -58,9 +58,8 @@ namespace video_export
 class  VideoPublisher;
 }
 
-namespace rviz
-{
-
+namespace rviz_common {
+namespace properties {
 class EnumProperty;
 class FloatProperty;
 class IntProperty;
@@ -68,12 +67,18 @@ class RenderPanel;
 class RosTopicProperty;
 class DisplayGroupVisibilityProperty;
 class ColorProperty;
+class StringProperty;
+}
+}
+
+namespace rviz
+{
 
 /**
  * \class CameraPub
  *
  */
-class CameraPub: public Display, public Ogre::RenderTargetListener
+class CameraPub: public rviz_common::Display, public Ogre::RenderTargetListener
 {
   Q_OBJECT
 public:
@@ -112,37 +117,39 @@ private Q_SLOTS:
 
 private:
   std::string camera_trigger_name_;
-  ros::NodeHandle nh_;
+  rclcpp::Node::SharedPtr nh_;
 
   void subscribe();
   void unsubscribe();
 
-  ros::ServiceServer trigger_service_;
-  bool triggerCallback(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res);
+  rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr trigger_service_;
+  bool triggerCallback(
+    const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+    std::shared_ptr<std_srvs::srv::Trigger::Response> response);
   bool trigger_activated_ = false;
-  ros::Time last_image_publication_time_ = ros::Time(0);
+  rclcpp::Time last_image_publication_time_;
 
-  void caminfoCallback(const sensor_msgs::CameraInfo::ConstPtr& msg);
+  void caminfoCallback(sensor_msgs::msg::CameraInfo::SharedPtr msg);
 
   bool updateCamera();
 
   void clear();
   void updateStatus();
 
-  ros::Subscriber caminfo_sub_;
+  rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr caminfo_sub_;
 
-  RosTopicProperty* topic_property_;
-  RosTopicProperty* camera_info_property_;
-  DisplayGroupVisibilityProperty* visibility_property_;
-  IntProperty* queue_size_property_;
-  StringProperty* namespace_property_;
+  rviz_common::properties::RosTopicProperty* topic_property_;
+  rviz_common::properties::RosTopicProperty* camera_info_property_;
+  rviz_common::properties::DisplayGroupVisibilityProperty* visibility_property_;
+  rviz_common::properties::IntProperty* queue_size_property_;
+  rviz_common::properties::StringProperty* namespace_property_;
 
-  FloatProperty* frame_rate_property_;
-  ColorProperty* background_color_property_;
-  EnumProperty* image_encoding_property_;
-  FloatProperty* near_clip_property_;
+  rviz_common::properties::FloatProperty* frame_rate_property_;
+  rviz_common::properties::ColorProperty* background_color_property_;
+  rviz_common::properties::EnumProperty* image_encoding_property_;
+  rviz_common::properties::FloatProperty* near_clip_property_;
 
-  sensor_msgs::CameraInfo::ConstPtr current_caminfo_;
+  sensor_msgs::msg::CameraInfo::SharedPtr current_caminfo_;
   boost::mutex caminfo_mutex_;
 
   bool new_caminfo_ = false;
@@ -155,7 +162,7 @@ private:
 
   uint32_t vis_bit_;
 
-  video_export::VideoPublisher* video_publisher_ = nullptr;
+  std::shared_ptr<video_export::VideoPublisher> video_publisher_;
 
   // render to texture
   // from http://www.ogre3d.org/tikiwiki/tiki-index.php?page=Intermediate+Tutorial+7
