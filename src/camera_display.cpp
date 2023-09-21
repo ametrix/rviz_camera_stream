@@ -546,7 +546,7 @@ void CameraPub::clear()
 
   // Add default camera info
   current_caminfo_ = std::make_shared<sensor_msgs::msg::CameraInfo>();
-  current_caminfo_->header.frame_id = "map";
+  current_caminfo_->header.frame_id = "camera1";
   current_caminfo_->width = 640;
   current_caminfo_->height = 480;
   current_caminfo_->binning_x = 0;
@@ -555,10 +555,12 @@ void CameraPub::clear()
   current_caminfo_->roi.y_offset = 0;
   current_caminfo_->roi.width = 640;
   current_caminfo_->roi.height = 480;
-  current_caminfo_->d = {};
-  current_caminfo_->k = {10.0, 0.0, 0.0, 0.0, 10.0, 0.0, 0.0, 0.0, 1.0};
+  current_caminfo_->roi.do_rectify = false;
+  current_caminfo_->distortion_model = "plumb_bob";
+  current_caminfo_->d = {0.0};
+  current_caminfo_->k = {300.0, 0.0, 640, 0.0, 300.0, 360.0, 0.0, 0.0, 1.0};
   current_caminfo_->r = {1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0};
-  current_caminfo_->p = {1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0};
+  current_caminfo_->p = {300.0, 0.0, 640, 0.0, 0.0, 300.0, 360.0, 0.0, 0.0, 0.0, 1.0, 0.0};
 
   std::string topic = "unknown";
   if (caminfo_sub_) {
