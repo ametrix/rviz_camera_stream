@@ -455,9 +455,12 @@ void CameraPub::subscribe()
 
   try
   {
+    rclcpp::QoS qosLatching = rclcpp::QoS(rclcpp::KeepLast(1));
+    qosLatching.transient_local();
+    qosLatching.reliable();
     // caminfo_sub_.subscribe(update_nh_, caminfo_topic, 1);
     caminfo_sub_ = nh_->create_subscription<sensor_msgs::msg::CameraInfo>(
-      caminfo_topic, 1, std::bind(&CameraPub::caminfoCallback, this, std::placeholders::_1));
+      caminfo_topic, qosLatching, std::bind(&CameraPub::caminfoCallback, this, std::placeholders::_1));
 
     setStatus(rviz_common::properties::StatusProperty::Ok, "Camera Info", "OK");
   }
