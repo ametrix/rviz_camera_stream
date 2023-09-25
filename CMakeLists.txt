@@ -110,7 +110,7 @@ install(DIRECTORY
 )
 
 install(DIRECTORY
-  config
+  config launch
   DESTINATION share/${PROJECT_NAME}/
 )
 
