@@ -24,6 +24,8 @@ find_package(Boost REQUIRED thread)
 find_package(ament_cmake REQUIRED)
 find_package(Qt5 REQUIRED COMPONENTS Core Widgets)
 find_package(rclcpp REQUIRED)
+find_package(tf2 REQUIRED)
+find_package(tf2_ROS REQUIRED)
 find_package(image_transport REQUIRED)
 find_package(std_srvs REQUIRED)
 find_package(sensor_msgs REQUIRED)
@@ -56,6 +58,8 @@ target_include_directories(${PROJECT_NAME} PUBLIC
 ament_target_dependencies(${PROJECT_NAME}
   Boost
   rclcpp
+  tf2
+  tf2_ros
   image_transport
   sensor_msgs
   std_srvs
@@ -70,6 +74,8 @@ pluginlib_export_plugin_description_file(rviz_common plugin_description.xml)
 ament_export_dependencies(
   Boost
   rclcpp
+  tf2
+  tf2_ros
   image_transport
   sensor_msgs
   std_srvs
