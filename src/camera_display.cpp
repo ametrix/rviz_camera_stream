@@ -299,6 +299,9 @@ void CameraPub::onInitialize()
 {
   rviz_common::Display::onInitialize();
 
+  auto nodeAbstraction = context_->getRosNodeAbstraction().lock();
+  nh_ = nodeAbstraction->get_raw_node();
+
   topic_property_->initialize(context_->getRosNodeAbstraction());
   camera_info_property_->initialize(context_->getRosNodeAbstraction());
 
