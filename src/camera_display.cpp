@@ -381,7 +381,7 @@ void CameraPub::postRenderTargetUpdate(const Ogre::RenderTargetEvent& evt)
   }
   if (!(trigger_activated_ || time_is_up))
   {
-    RCLCPP_INFO(nh_->get_logger(), "NO TRIGGER OR TIME IS UP! RETURNING...");
+    RCLCPP_DEBUG(nh_->get_logger(), "NO TRIGGER OR TIME IS UP! RETURNING...");
     return;
   }
   trigger_activated_ = false;
@@ -392,7 +392,7 @@ void CameraPub::postRenderTargetUpdate(const Ogre::RenderTargetEvent& evt)
   {
     boost::mutex::scoped_lock lock(caminfo_mutex_);
     if (!current_caminfo_) {
-      RCLCPP_INFO(nh_->get_logger(), "1 - NO CAMERA INFO! RETURNING...");
+      RCLCPP_DEBUG(nh_->get_logger(), "1 - NO CAMERA INFO! RETURNING...");
       return;
     }
     frame_id = current_caminfo_->header.frame_id;
@@ -402,7 +402,7 @@ void CameraPub::postRenderTargetUpdate(const Ogre::RenderTargetEvent& evt)
   int encoding_option = image_encoding_property_->getOptionInt();
 
   // render_texture_->update();
-  RCLCPP_INFO(nh_->get_logger(), "PUBLISHING FRAME...");
+  RCLCPP_DEBUG(nh_->get_logger(), "PUBLISHING FRAME...");
   video_publisher_->publishFrame(render_texture_, frame_id, encoding_option);
 }
 
@@ -621,7 +621,7 @@ bool CameraPub::updateCamera()
 
   if (!info)
   {
-    RCLCPP_INFO(nh_->get_logger(), "NO CAMERA INFO! RETURNING...");
+    RCLCPP_DEBUG(nh_->get_logger(), "NO CAMERA INFO! RETURNING...");
     return false;
   }
 
@@ -642,7 +642,7 @@ bool CameraPub::updateCamera()
     return false;
   }
 
-  RCLCPP_INFO(nh_->get_logger(), "UPDATING TEXTURES....");
+  RCLCPP_DEBUG(nh_->get_logger(), "UPDATING TEXTURES....");
 
 
   // TODO(lucasw) this will make the img vs. texture size code below unnecessary
