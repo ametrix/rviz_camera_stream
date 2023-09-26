@@ -11,6 +11,8 @@ from launch.event_handlers import (OnExecutionComplete, OnProcessExit,
 
 def launch_setup(context, *args, **kwargs):
 
+    frame_id = LaunchConfiguration('frame_id')
+
     rviz_config_package_name = LaunchConfiguration("rviz_config_package_name", default="rviz_camera_stream")
     rviz_config_file_name = LaunchConfiguration("rviz_config_file_name", default="rviz_camera_stream")
 
@@ -40,7 +42,7 @@ def launch_setup(context, *args, **kwargs):
         name="camera1_transform",
         output="screen",
         emulate_tty=True,
-        arguments=["5.5", "1.5", "-5.5", "0", "0", "0", "1", "map", "camera1"],
+        arguments=["-0.8", "0.5", "1.2", "4.0", "0.0", "4.1", frame_id, "camera1"],
         on_exit=Shutdown(),
     )
 
@@ -50,7 +52,7 @@ def launch_setup(context, *args, **kwargs):
         name="camera2_transform",
         output="screen",
         emulate_tty=True,
-        arguments=["5.5", "0.5", "-0.5", "0", "0", "0", "1", "map", "camera2"],
+        arguments=["-0.8", "0.0", "-0.5", "0.0", "0.0", "0.0", frame_id, "camera2"],
         on_exit=Shutdown(),
     )
 
@@ -63,10 +65,10 @@ def launch_setup(context, *args, **kwargs):
              ['/rviz/camera1/info', 'sensor_msgs/CameraInfo',
               '''{header: {stamp: 'now', frame_id: 'camera1'},
                 height: 480, width: 640, distortion_model: 'plumb_bob',
-                d: [0.0],
-                k: [300.0, 0.0, 640, 0.0, 300.0, 360.0, 0.0, 0.0, 1.0],
+                d: [0.0, 0.0, 0.0, 0.0, 0.0],
+                k: [200.0, 0.0, 320.0, 0.0, 200.0, 240.0, 0.0, 0.0, 1.0],
                 r: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
-                p: [300.0, 0.0, 640, 0.0, 0.0, 300.0, 360.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                p: [200.0, 0.0, 320.0, 0.0, 0.0, 200.0, 240.0, 0.0, 0.0, 0.0, 1.0, 0.0],
                 binning_x: 0, binning_y: 0,
                 roi: {x_offset: 0, y_offset: 0, height: 480, width: 640, do_rectify: false}}''', '-1'
              ]),
@@ -88,10 +90,10 @@ def launch_setup(context, *args, **kwargs):
              ['/rviz/camera2/info', 'sensor_msgs/CameraInfo',
               '''{header: {stamp: 'now', frame_id: 'camera2'},
                 height: 480, width: 640, distortion_model: 'plumb_bob',
-                d: [0.0],
-                k: [300.0, 0.0, 640, 0.0, 300.0, 360.0, 0.0, 0.0, 1.0],
+                d: [0.0, 0.0, 0.0, 0.0, 0.0],
+                k: [200.0, 0.0, 320.0, 0.0, 200.0, 240.0, 0.0, 0.0, 1.0],
                 r: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
-                p: [300.0, 0.0, 640, 0.0, 0.0, 300.0, 360.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                p: [200.0, 0.0, 320.0, 0.0, 0.0, 200.0, 240.0, 0.0, 0.0, 0.0, 1.0, 0.0],
                 binning_x: 0, binning_y: 0,
                 roi: {x_offset: 0, y_offset: 0, height: 480, width: 640, do_rectify: false}}''', '-1'
              ]),
@@ -123,6 +125,14 @@ def generate_launch_description():
             name="launch_rviz",
             default_value="True",
             description="Enable/disable spawning of RViz node.",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            name="frame_id",
+            default_value="map",
+            description="Base frame id used for mapping between camera frame ids.",
         )
     )
 

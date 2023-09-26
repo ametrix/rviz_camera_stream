@@ -217,6 +217,7 @@ CameraPub::CameraPub()
   : rviz_common::Display()
   , camera_trigger_name_("camera_trigger")
   , nh_(rclcpp::Node::make_shared("camera_pub", rclcpp::NodeOptions()))
+  , executor_(rclcpp::ExecutorOptions(), 12)
 {
   last_image_publication_time_ = nh_->now();
 
@@ -270,6 +271,10 @@ CameraPub::~CameraPub()
 {
   if (initialized())
   {
+    if (thread_.joinable()) {
+      thread_.join();
+    }
+
     render_texture_->removeListener(this);
 
     unsubscribe();
@@ -299,8 +304,10 @@ void CameraPub::onInitialize()
 {
   rviz_common::Display::onInitialize();
 
-  auto nodeAbstraction = context_->getRosNodeAbstraction().lock();
-  nh_ = nodeAbstraction->get_raw_node();
+  // auto nodeAbstraction = context_->getRosNodeAbstraction().lock();
+  // nh_ = nodeAbstraction->get_raw_node();
+
+  executor_.add_node(nh_);
 
   topic_property_->initialize(context_->getRosNodeAbstraction());
   camera_info_property_->initialize(context_->getRosNodeAbstraction());
@@ -351,6 +358,9 @@ void CameraPub::onInitialize()
 
   this->addChild(visibility_property_, 0);
   updateDisplayNamespace();
+
+  thread_ = std::thread(
+        &rclcpp::executors::MultiThreadedExecutor::spin, &executor_);
 }
 
 void CameraPub::updateTopic()
@@ -469,7 +479,10 @@ void CameraPub::subscribe()
     setStatus(rviz_common::properties::StatusProperty::Error, "Camera Info", QString("Error subscribing: ") + e.what());
   }
 
-  video_publisher_->advertise(topic_name);
+  if (!video_publisher_advertised_) {
+    video_publisher_advertised_ = true;
+    video_publisher_->advertise(topic_name);
+  }
   setStatus(rviz_common::properties::StatusProperty::Ok, "Output Topic", "Topic set");
 }
 

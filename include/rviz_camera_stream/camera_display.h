@@ -33,6 +33,8 @@
 #include <QObject>
 #include <string>
 #include <boost/thread/mutex.hpp>
+#include <rclcpp/rclcpp.hpp>
+
 
 #ifndef Q_MOC_RUN
 #include <OgreMaterial.h>
@@ -118,6 +120,8 @@ private Q_SLOTS:
 private:
   std::string camera_trigger_name_;
   rclcpp::Node::SharedPtr nh_;
+  std::thread thread_;
+  rclcpp::executors::MultiThreadedExecutor executor_;
 
   void subscribe();
   void unsubscribe();
@@ -163,6 +167,7 @@ private:
   uint32_t vis_bit_;
 
   std::shared_ptr<video_export::VideoPublisher> video_publisher_;
+  bool video_publisher_advertised_ = {false};
 
   // render to texture
   // from http://www.ogre3d.org/tikiwiki/tiki-index.php?page=Intermediate+Tutorial+7
