@@ -34,13 +34,14 @@ find_package(rviz_ogre_vendor REQUIRED)
 find_package(rviz_common REQUIRED)
 find_package(rviz_default_plugins REQUIRED)
 
-qt5_wrap_cpp(${PROJECT_NAME}_mocs include/${PROJECT_NAME}/camera_display.h)
+qt5_wrap_cpp(${PROJECT_NAME}_mocs include/${PROJECT_NAME}/camera_display.hpp)
 
 include_directories(
   include
 )
 
 add_library(${PROJECT_NAME} SHARED
+  src/video_publisher.cpp
   src/camera_display.cpp
   ${${PROJECT_NAME}_mocs}
 )

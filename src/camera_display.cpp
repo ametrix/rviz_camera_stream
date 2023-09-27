@@ -27,6 +27,10 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include "rviz_camera_stream/camera_display.hpp"
+
+#include <string>
+
 #include <rviz_common/bit_allocator.hpp>
 #include <rviz_common/display_context.hpp>
 #include <rviz_common/frame_manager_iface.hpp>
@@ -61,140 +65,11 @@
 #include <image_transport/image_transport.hpp>
 #include <sensor_msgs/image_encodings.hpp>
 
-#include <string>
-
 #include <rmw/qos_profiles.h>
 #include <rclcpp/qos.hpp>
 #include <rmw/types.h>
 
-#include "rviz_camera_stream/camera_display.h"
-
-namespace video_export
-{
-class VideoPublisher
-{
-private:
-  rclcpp::Node::SharedPtr nh_;
-  std::shared_ptr<image_transport::ImageTransport> it_;
-  image_transport::CameraPublisher pub_;
-  uint image_id_;
-public:
-  sensor_msgs::msg::CameraInfo camera_info_;
-  VideoPublisher() :
-    nh_(rclcpp::Node::make_shared("video_publisher", rclcpp::NodeOptions())),
-    it_(std::make_shared<image_transport::ImageTransport>(nh_)),
-    image_id_(0)
-  {
-  }
-
-  std::string get_topic()
-  {
-    return pub_.getTopic();
-  }
-
-  bool is_active()
-  {
-    return !get_topic().empty();
-  }
-
-  void setNodehandle(const rclcpp::Node::SharedPtr& nh)
-  {
-    shutdown();
-    nh_ = nh;
-    it_ = std::make_shared<image_transport::ImageTransport>(nh_);
-  }
-
-  void shutdown()
-  {
-    if (get_topic() != "")
-    {
-      pub_.shutdown();
-    }
-  }
-
-  void advertise(std::string topic)
-  {
-    pub_ = it_->advertiseCamera(topic, 1);
-  }
-
-  // bool publishFrame(Ogre::RenderWindow * render_object, const std::string frame_id)
-  bool publishFrame(Ogre::RenderTexture * render_object, const std::string frame_id, int encoding_option)
-  {
-    if (get_topic() == "")
-    {
-      return false;
-    }
-    if (frame_id == "")
-    {
-      return false;
-    }
-    // RenderTarget::writeContentsToFile() used as example
-    // TODO(lucasw) make things const that can be
-    int height = render_object->getHeight();
-    int width = render_object->getWidth();
-    // the suggested pixel format is most efficient, but other ones
-    // can be used.
-    sensor_msgs::msg::Image image;
-    Ogre::PixelFormat pf = Ogre::PF_BYTE_RGB;
-    switch (encoding_option)
-    {
-      case 0:
-        pf = Ogre::PF_BYTE_RGB;
-        image.encoding = sensor_msgs::image_encodings::RGB8;
-        break;
-      case 1:
-        pf = Ogre::PF_BYTE_RGBA;
-        image.encoding = sensor_msgs::image_encodings::RGBA8;
-        break;
-      case 2:
-        pf = Ogre::PF_BYTE_BGR;
-        image.encoding = sensor_msgs::image_encodings::BGR8;
-        break;
-      case 3:
-        pf = Ogre::PF_BYTE_BGRA;
-        image.encoding = sensor_msgs::image_encodings::BGRA8;
-        break;
-      case 4:
-        pf = Ogre::PF_L8;
-        image.encoding = sensor_msgs::image_encodings::MONO8;
-        break;
-      case 5:
-        pf = Ogre::PF_L16;
-        image.encoding = sensor_msgs::image_encodings::MONO16;
-        break;
-      default:
-        RCLCPP_ERROR(nh_->get_logger(), "Invalid image encoding value specified");
-        return false;
-    }
-
-    uint pixelsize = Ogre::PixelUtil::getNumElemBytes(pf);
-    uint datasize = width * height * pixelsize;
-
-    // 1.05 multiplier is to avoid crash when the window is resized.
-    // There should be a better solution.
-    uchar *data = OGRE_ALLOC_T(uchar, static_cast<int>(datasize * 1.05), Ogre::MEMCATEGORY_RENDERSYS);
-    Ogre::PixelBox pb(width, height, 1, pf, data);
-    render_object->copyContentsToMemory(pb, Ogre::RenderTarget::FB_AUTO);
-
-
-    image.header.stamp = nh_->now();
-   // image.header.seq = image_id_++;
-    image.header.frame_id = frame_id;
-    image.height = height;
-    image.width = width;
-    image.step = pixelsize * width;
-    image.is_bigendian = (OGRE_ENDIAN == OGRE_ENDIAN_BIG);
-    image.data.resize(datasize);
-    memcpy(&image.data[0], data, datasize);
-    camera_info_.header = image.header;
-    pub_.publish(image, camera_info_);
-
-    OGRE_FREE(data, Ogre::MEMCATEGORY_RENDERSYS);
-    return true;
-  }
-};
-}  // namespace video_export
-
+#include "rviz_camera_stream/video_publisher.hpp"
 
 namespace rviz
 {
