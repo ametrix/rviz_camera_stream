@@ -72,7 +72,7 @@ bool VideoPublisher::isActive()
 
 void VideoPublisher::shutdown()
 {
-  if (getTopic().empty()) {
+  if (!getTopic().empty()) {
     pub_.shutdown();
   }
 }

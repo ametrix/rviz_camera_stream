@@ -233,7 +233,7 @@ void CameraPub::onInitialize()
 void CameraPub::updateTopic()
 {
   unsubscribe();
-  reset();
+  clear();
   subscribe();
   context_->queueRender();
 }
