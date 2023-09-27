@@ -48,22 +48,23 @@ namespace video_export
 class VideoPublisher
 {
 public:
-  sensor_msgs::msg::CameraInfo camera_info_;
+  VideoPublisher(const rclcpp::Node::SharedPtr &node);
 
-  VideoPublisher();
-
-  std::string get_topic();
-  bool is_active();
-  bool publishFrame(Ogre::RenderTexture * render_object, const std::string frame_id, int encoding_option);
+  std::string getTopic();
+  sensor_msgs::msg::CameraInfo::SharedPtr cameraInfo() const;
+  bool isActive();
+  bool publishFrame(Ogre::RenderTexture * render_object, int encoding_option);
 
   void advertise(std::string topic);
-  void setNodehandle(const rclcpp::Node::SharedPtr& nh);
   void shutdown();
+  void setCameraInfo(const sensor_msgs::msg::CameraInfo::SharedPtr &camera_info);
 
 private:
+  mutable std::mutex mutex_;
   rclcpp::Node::SharedPtr nh_;
-  std::shared_ptr<image_transport::ImageTransport> it_;
+  image_transport::ImageTransport it_;
   image_transport::CameraPublisher pub_;
+  sensor_msgs::msg::CameraInfo::SharedPtr camera_info_;
 };
 
 } // namespace video_export

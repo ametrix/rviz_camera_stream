@@ -31,10 +31,8 @@
 #define RVIZ_CAMERA_STREAM_CAMERA_DISPLAY_HPP
 
 #include <QObject>
-#include <string>
-#include <boost/thread/mutex.hpp>
-#include <rclcpp/rclcpp.hpp>
 
+#include <string>
 
 #ifndef Q_MOC_RUN
 #include <OgreMaterial.h>
@@ -42,6 +40,7 @@
 #include <OgreSharedPtr.h>
 #include <OgreTexture.h>
 
+#include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/camera_info.hpp>
 #include <rviz_default_plugins/displays/image/image_display.hpp>
 #include <std_srvs/srv/trigger.hpp>
@@ -83,10 +82,16 @@ namespace rviz
 class CameraPub: public rviz_common::Display, public Ogre::RenderTargetListener
 {
   Q_OBJECT
+
 public:
+  static const QString BACKGROUND;
+  static const QString OVERLAY;
+  static const QString BOTH;
+
   CameraPub();
   virtual ~CameraPub();
 
+protected:
   // Overrides from Display
   virtual void onInitialize();
   virtual void fixedFrameChanged();
@@ -97,83 +102,62 @@ public:
   virtual void preRenderTargetUpdate(const Ogre::RenderTargetEvent& evt);
   virtual void postRenderTargetUpdate(const Ogre::RenderTargetEvent& evt);
 
-  static const QString BACKGROUND;
-  static const QString OVERLAY;
-  static const QString BOTH;
-
-protected:
   // overrides from Display
   virtual void onEnable();
   virtual void onDisable();
 
 private Q_SLOTS:
   void forceRender();
-
   void updateTopic();
-  virtual void updateQueueSize();
-  virtual void updateFrameRate();
-  virtual void updateBackgroundColor();
-  virtual void updateDisplayNamespace();
-  virtual void updateImageEncoding();
-  virtual void updateNearClipDistance();
+  void updateQueueSize();
+  void updateFrameRate();
+  void updateBackgroundColor();
+  void updateImageEncoding();
+  void updateNearClipDistance();
 
 private:
-  std::string camera_trigger_name_;
-  rclcpp::Node::SharedPtr nh_;
-  std::thread thread_;
-  rclcpp::executors::MultiThreadedExecutor executor_;
+  static inline int count_ = 0;
 
-  void subscribe();
-  void unsubscribe();
-
-  rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr trigger_service_;
   bool triggerCallback(
     const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
     std::shared_ptr<std_srvs::srv::Trigger::Response> response);
-  bool trigger_activated_ = false;
-  rclcpp::Time last_image_publication_time_;
-
   void caminfoCallback(sensor_msgs::msg::CameraInfo::SharedPtr msg);
 
-  bool updateCamera();
-
+  void subscribe();
+  void unsubscribe();
   void clear();
   void updateStatus();
 
+  bool force_render_ {false};
+  bool trigger_activated_ {false};
+
+  uint32_t vis_bit_{0};
+
+  std::string camera_trigger_name_;
+
+  rclcpp::Node::SharedPtr nh_;
+  rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr trigger_service_;
   rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr caminfo_sub_;
+  rclcpp::Time last_image_publication_time_;
 
-  rviz_common::properties::RosTopicProperty* topic_property_;
-  rviz_common::properties::RosTopicProperty* camera_info_property_;
-  rviz_common::properties::DisplayGroupVisibilityProperty* visibility_property_;
-  rviz_common::properties::IntProperty* queue_size_property_;
-  rviz_common::properties::StringProperty* namespace_property_;
+  rviz_common::properties::RosTopicProperty* topic_property_{nullptr};
+  rviz_common::properties::RosTopicProperty* camera_info_property_{nullptr};
+  rviz_common::properties::DisplayGroupVisibilityProperty* visibility_property_{nullptr};
+  rviz_common::properties::IntProperty* queue_size_property_{nullptr};
 
-  rviz_common::properties::FloatProperty* frame_rate_property_;
-  rviz_common::properties::ColorProperty* background_color_property_;
-  rviz_common::properties::EnumProperty* image_encoding_property_;
-  rviz_common::properties::FloatProperty* near_clip_property_;
-
-  sensor_msgs::msg::CameraInfo::SharedPtr current_caminfo_;
-  boost::mutex caminfo_mutex_;
-
-  bool new_caminfo_ = false;
-
-  bool caminfo_ok_ = false;
-
-  bool force_render_ = false;
-
-  static inline int count_ = 0;
-
-  uint32_t vis_bit_;
+  rviz_common::properties::FloatProperty* frame_rate_property_{nullptr};
+  rviz_common::properties::ColorProperty* background_color_property_{nullptr};
+  rviz_common::properties::EnumProperty* image_encoding_property_{nullptr};
+  rviz_common::properties::FloatProperty* near_clip_property_{nullptr};
 
   std::shared_ptr<video_export::VideoPublisher> video_publisher_;
-  bool video_publisher_advertised_ = {false};
 
   // render to texture
   // from http://www.ogre3d.org/tikiwiki/tiki-index.php?page=Intermediate+Tutorial+7
-  Ogre::Camera* camera_;
-  Ogre::TexturePtr rtt_texture_;
-  Ogre::RenderTexture* render_texture_;
+  Ogre::SceneNode* camera_node_{nullptr};
+  Ogre::Camera* camera_{nullptr};
+  Ogre::TexturePtr rtt_texture_{nullptr};
+  Ogre::RenderTexture* render_texture_{nullptr};
 };
 
 }  // namespace rviz

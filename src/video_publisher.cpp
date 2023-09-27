@@ -43,48 +43,53 @@
 namespace video_export
 {
 
-VideoPublisher::VideoPublisher() :
-  nh_(rclcpp::Node::make_shared("video_publisher", rclcpp::NodeOptions())),
-  it_(std::make_shared<image_transport::ImageTransport>(nh_))
+VideoPublisher::VideoPublisher(const rclcpp::Node::SharedPtr &node) :
+  nh_(node),
+  it_(node)
 {
 }
 
-std::string VideoPublisher::get_topic()
+std::string VideoPublisher::getTopic()
 {
   return pub_.getTopic();
 }
 
-bool VideoPublisher::is_active()
-{
-  return !get_topic().empty();
+sensor_msgs::msg::CameraInfo::SharedPtr VideoPublisher::cameraInfo() const {
+  std::lock_guard<std::mutex> lock(mutex_);
+  return camera_info_;
 }
 
-void VideoPublisher::setNodehandle(const rclcpp::Node::SharedPtr& nh)
+bool VideoPublisher::isActive()
 {
-  shutdown();
-  nh_ = nh;
-  it_ = std::make_shared<image_transport::ImageTransport>(nh_);
+  bool ok = false;
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    ok = camera_info_ != nullptr && !camera_info_->header.frame_id.empty();
+  }
+
+  return !getTopic().empty() && ok;
 }
 
 void VideoPublisher::shutdown()
 {
-  if (get_topic() != "") {
+  if (getTopic().empty()) {
     pub_.shutdown();
   }
 }
 
-void VideoPublisher::advertise(std::string topic)
+void VideoPublisher::setCameraInfo(const sensor_msgs::msg::CameraInfo::SharedPtr &camera_info)
 {
-  pub_ = it_->advertiseCamera(topic, 1);
+  std::lock_guard<std::mutex> lock(mutex_);
+  camera_info_ = camera_info;
 }
 
-  // bool publishFrame(Ogre::RenderWindow * render_object, const std::string frame_id)
-bool VideoPublisher::publishFrame(Ogre::RenderTexture * render_object, const std::string frame_id, int encoding_option) {
-    if (get_topic().empty()) {
-      return false;
-    }
+void VideoPublisher::advertise(std::string topic)
+{
+  pub_ = it_.advertiseCamera(topic, 1);
+}
 
-    if (frame_id.empty()) {
+bool VideoPublisher::publishFrame(Ogre::RenderTexture * render_object, int encoding_option) {
+    if (!isActive()) {
       return false;
     }
 
@@ -128,22 +133,24 @@ bool VideoPublisher::publishFrame(Ogre::RenderTexture * render_object, const std
     const uint32_t pixelsize = Ogre::PixelUtil::getNumElemBytes(pf);
     const uint32_t datasize = width * height * pixelsize;
 
-    image.header.stamp = nh_->now();
-    image.header.frame_id = frame_id;
     image.height = height;
     image.width = width;
     image.step = pixelsize * width;
     image.is_bigendian = (OGRE_ENDIAN == OGRE_ENDIAN_BIG);
     image.data.resize(datasize);
-    camera_info_.header = image.header;
 
     Ogre::PixelBox pb(width, height, 1, pf, image.data.data());
-    render_object->copyContentsToMemory(pb, Ogre::RenderTarget::FB_AUTO);
+    const Ogre::Box src(0, 0, width, height);
+    render_object->copyContentsToMemory(src, pb, Ogre::RenderTarget::FB_AUTO);
 
-    pub_.publish(image, camera_info_);
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      camera_info_->header.stamp = nh_->now();
+      image.header = camera_info_->header;
+      pub_.publish(image, *camera_info_);
+    }
+
     return true;
 }
-
-
 
 }  // namespace video_export

@@ -30,6 +30,10 @@
 #include "rviz_camera_stream/camera_display.hpp"
 
 #include <string>
+#include <chrono>
+#include <random>
+#include <functional>
+#include <iostream>
 
 #include <rviz_common/bit_allocator.hpp>
 #include <rviz_common/display_context.hpp>
@@ -89,24 +93,14 @@ bool validateFloats(const sensor_msgs::msg::CameraInfo& msg)
 }
 
 CameraPub::CameraPub()
-  : rviz_common::Display()
-  , camera_trigger_name_("camera_trigger")
-  , nh_(rclcpp::Node::make_shared("camera_pub", rclcpp::NodeOptions()))
-  , executor_(rclcpp::ExecutorOptions(), 12)
+  : camera_trigger_name_("camera_trigger")
 {
-  last_image_publication_time_ = nh_->now();
-
   std::string dataType = rosidl_generator_traits::data_type<sensor_msgs::msg::Image>();
-  RCLCPP_INFO_STREAM(nh_->get_logger(), "DATA TYPE: " << dataType);
   topic_property_ = new rviz_common::properties::RosTopicProperty("Image Topic", "",
       QString::fromStdString(dataType),
       "sensor_msgs::Image topic to publish to.", this, SLOT(updateTopic()));
 
-  namespace_property_ = new rviz_common::properties::StringProperty("Display namespace", "",
-      "Namespace for this display.", this, SLOT(updateDisplayNamespace()));
-
   dataType = rosidl_generator_traits::data_type<sensor_msgs::msg::CameraInfo>();
-  RCLCPP_INFO_STREAM(nh_->get_logger(), "DATA TYPE: " << dataType);
   camera_info_property_ = new rviz_common::properties::RosTopicProperty("Camera Info Topic", "",
       QString::fromStdString(dataType),
       "sensor_msgs::CameraInfo topic to subscribe to.", this, SLOT(updateTopic()));
@@ -146,10 +140,6 @@ CameraPub::~CameraPub()
 {
   if (initialized())
   {
-    if (thread_.joinable()) {
-      thread_.join();
-    }
-
     render_texture_->removeListener(this);
 
     unsubscribe();
@@ -159,19 +149,17 @@ CameraPub::~CameraPub()
 }
 
 bool CameraPub::triggerCallback(
-  const std::shared_ptr<std_srvs::srv::Trigger::Request> req,
+  const std::shared_ptr<std_srvs::srv::Trigger::Request> /*req*/,
   std::shared_ptr<std_srvs::srv::Trigger::Response> res)
 {
-    res->success = video_publisher_->is_active();
-    if (res->success)
-    {
-      trigger_activated_ = true;
-      res->message = "New image will be published on: " + video_publisher_->get_topic();
-    }
-    else
-    {
-      res->message = "Image publisher not configured";
-    }
+  res->success = video_publisher_->isActive();
+  if (res->success) {
+    trigger_activated_ = true;
+    res->message = "New image will be published on: " + video_publisher_->getTopic();
+  } else {
+    res->message = "Image publisher not configured";
+  }
+
   return true;
 }
 
@@ -179,21 +167,30 @@ void CameraPub::onInitialize()
 {
   rviz_common::Display::onInitialize();
 
-  // auto nodeAbstraction = context_->getRosNodeAbstraction().lock();
-  // nh_ = nodeAbstraction->get_raw_node();
+  auto nodeAbstraction = context_->getRosNodeAbstraction().lock();
+  if (!nodeAbstraction) {
+    throw std::runtime_error("Error: nodeAbstraction is NULL!");
+  }
 
-  executor_.add_node(nh_);
+  nh_ = nodeAbstraction->get_raw_node();
+  last_image_publication_time_ = nh_->now();
 
   topic_property_->initialize(context_->getRosNodeAbstraction());
   camera_info_property_->initialize(context_->getRosNodeAbstraction());
 
   count_++;
 
-  video_publisher_ = std::make_shared<video_export::VideoPublisher>();
+  video_publisher_ = std::make_shared<video_export::VideoPublisher>(nh_);
 
   std::stringstream ss;
   ss << "RvizCameraPubCamera" << count_;
+
   camera_ = context_->getSceneManager()->createCamera(ss.str());
+  camera_->setNearClipDistance(0.01f);
+  camera_node_ = context_->getSceneManager()->getRootSceneNode()->createChildSceneNode();
+  camera_node_->setPosition(0, 10, 15);
+  camera_node_->lookAt(Ogre::Vector3(0, 0, 0), Ogre::Node::TransformSpace::TS_WORLD);
+  camera_node_->attachObject(camera_);
 
   std::stringstream ss_tex;
   ss_tex << "RttTexInit" << count_;
@@ -217,10 +214,6 @@ void CameraPub::onInitialize()
   render_texture_->setActive(false);
   render_texture_->addListener(this);
 
-  camera_->setNearClipDistance(0.01f);
-  camera_->setPosition(0, 10, 15);
-  camera_->lookAt(0, 0, 0);
-
   // Thought this was optional but the plugin crashes without it
   vis_bit_ = context_->visibilityBits()->allocBit();
   render_texture_->getViewport(0)->setVisibilityMask(vis_bit_);
@@ -231,11 +224,10 @@ void CameraPub::onInitialize()
 
   visibility_property_->setIcon(rviz_common::loadPixmap("package://rviz/icons/visibility.svg", true));
 
-  this->addChild(visibility_property_, 0);
-  updateDisplayNamespace();
+  // this->addChild(visibility_property_, 0);
 
-  thread_ = std::thread(
-        &rclcpp::executors::MultiThreadedExecutor::spin, &executor_);
+  trigger_service_ = nh_->create_service<std_srvs::srv::Trigger>(
+    camera_trigger_name_, std::bind(&CameraPub::triggerCallback, this, std::placeholders::_1, std::placeholders::_2));
 }
 
 void CameraPub::updateTopic()
@@ -246,13 +238,13 @@ void CameraPub::updateTopic()
   context_->queueRender();
 }
 
-void CameraPub::preRenderTargetUpdate(const Ogre::RenderTargetEvent& evt)
+void CameraPub::preRenderTargetUpdate(const Ogre::RenderTargetEvent& /*evt*/)
 {
   // set view flags on all displays
   visibility_property_->update();
 }
 
-void CameraPub::postRenderTargetUpdate(const Ogre::RenderTargetEvent& evt)
+void CameraPub::postRenderTargetUpdate(const Ogre::RenderTargetEvent& /*evt*/)
 {
   // Publish the rendered window video stream
   const rclcpp::Time cur_time = nh_->now();
@@ -266,29 +258,14 @@ void CameraPub::postRenderTargetUpdate(const Ogre::RenderTargetEvent& evt)
   }
   if (!(trigger_activated_ || time_is_up))
   {
-    RCLCPP_DEBUG(nh_->get_logger(), "NO TRIGGER OR TIME IS UP! RETURNING...");
     return;
   }
   trigger_activated_ = false;
   last_image_publication_time_ = cur_time;
   render_texture_->getViewport(0)->setBackgroundColour(background_color_property_->getOgreColor());
 
-  std::string frame_id;
-  {
-    boost::mutex::scoped_lock lock(caminfo_mutex_);
-    if (!current_caminfo_) {
-      RCLCPP_DEBUG(nh_->get_logger(), "1 - NO CAMERA INFO! RETURNING...");
-      return;
-    }
-    frame_id = current_caminfo_->header.frame_id;
-    video_publisher_->camera_info_ = *current_caminfo_;
-  }
-
   int encoding_option = image_encoding_property_->getOptionInt();
-
-  // render_texture_->update();
-  RCLCPP_DEBUG(nh_->get_logger(), "PUBLISHING FRAME...");
-  video_publisher_->publishFrame(render_texture_, frame_id, encoding_option);
+  video_publisher_->publishFrame(render_texture_, encoding_option);
 }
 
 void CameraPub::onEnable()
@@ -307,7 +284,6 @@ void CameraPub::onDisable()
 void CameraPub::subscribe()
 {
   if (!isEnabled()) {
-    RCLCPP_INFO(nh_->get_logger(), "NOT ENABLED RETURNING!");
     return;
   }
 
@@ -315,17 +291,17 @@ void CameraPub::subscribe()
   if (topic_name.empty())
   {
     setStatus(rviz_common::properties::StatusProperty::Error, "Output Topic", "No topic set");
-    RCLCPP_INFO(nh_->get_logger(), "NO OUTPUT TOPIC SET!");
     return;
   }
 
+  // TODO: Add name validation: https://answers.ros.org/question/397554/ros2-topic-name-validation/
+  //
   // std::string error;
   // if (!ros::names::validate(topic_name, error))
   // {
   //   setStatus(StatusProperty::Error, "Output Topic", QString(error.c_str()));
   //   return;
   // }
-
 
   std::string caminfo_topic = camera_info_property_->getTopicStd();
   if (caminfo_topic.empty())
@@ -334,16 +310,14 @@ void CameraPub::subscribe()
     return;
   }
 
-  // std::string target_frame = fixed_frame_.toStdString();
-  // rviz_common::Display::enableTFFilter(target_frame);
-
+  // TODO: Add name validation: https://answers.ros.org/question/397554/ros2-topic-name-validation/
+  //
 
   try
   {
     rclcpp::QoS qosLatching = rclcpp::QoS(rclcpp::KeepLast(1));
     qosLatching.transient_local();
     qosLatching.reliable();
-    // caminfo_sub_.subscribe(update_nh_, caminfo_topic, 1);
     caminfo_sub_ = nh_->create_subscription<sensor_msgs::msg::CameraInfo>(
       caminfo_topic, qosLatching, std::bind(&CameraPub::caminfoCallback, this, std::placeholders::_1));
 
@@ -354,10 +328,7 @@ void CameraPub::subscribe()
     setStatus(rviz_common::properties::StatusProperty::Error, "Camera Info", QString("Error subscribing: ") + e.what());
   }
 
-  if (!video_publisher_advertised_) {
-    video_publisher_advertised_ = true;
-    video_publisher_->advertise(topic_name);
-  }
+  video_publisher_->advertise(topic_name);
   setStatus(rviz_common::properties::StatusProperty::Ok, "Output Topic", "Topic set");
 }
 
@@ -390,42 +361,6 @@ void CameraPub::updateBackgroundColor()
 {
 }
 
-void CameraPub::updateDisplayNamespace()
-{
-  std::string name = namespace_property_->getStdString();
-
-  // try
-  // {
-  //   nh_ = rclcpp::Node::make_shared("camera_pub", name, rclcpp::NodeOptions());
-  // }
-  // catch (rclcpp::exceptions::InvalidNamespaceError& e)
-  // {
-  //   setStatus(rviz_common::properties::StatusProperty::Warn, "Display namespace", "Invalid namespace: " + QString(e.what()));
-  //   RCLCPP_ERROR(nh_->get_logger(), "%s", e.what());
-  //   return;
-  // }
-
-  video_publisher_->setNodehandle(nh_);
-
-  // ROS_INFO("New namespace: '%s'", nh_.getNamespace().c_str());
-  if (trigger_service_)
-    trigger_service_.reset();
-
-  trigger_service_ = nh_->create_service<std_srvs::srv::Trigger>(
-    camera_trigger_name_, std::bind(&CameraPub::triggerCallback, this, std::placeholders::_1, std::placeholders::_2));
-
-  // /// Check for service name collision
-  // if (trigger_service_.getService().empty())
-  // {
-  //   setStatus(StatusProperty::Warn, "Display namespace",
-  //             "Could not create trigger. Make sure that display namespace is unique!");
-  //   return;
-  // }
-
-  setStatus(rviz_common::properties::StatusProperty::Ok, "Display namespace", "OK");
-  updateTopic();
-}
-
 void CameraPub::updateImageEncoding()
 {
 }
@@ -435,26 +370,7 @@ void CameraPub::clear()
   force_render_ = true;
   context_->queueRender();
 
-  new_caminfo_ = false;
-  current_caminfo_.reset();
-
-  // Add default camera info
-  // current_caminfo_ = std::make_shared<sensor_msgs::msg::CameraInfo>();
-  // current_caminfo_->header.frame_id = "camera1";
-  // current_caminfo_->width = 640;
-  // current_caminfo_->height = 480;
-  // current_caminfo_->binning_x = 0;
-  // current_caminfo_->binning_y = 0;
-  // current_caminfo_->roi.x_offset = 0;
-  // current_caminfo_->roi.y_offset = 0;
-  // current_caminfo_->roi.width = 640;
-  // current_caminfo_->roi.height = 480;
-  // current_caminfo_->roi.do_rectify = false;
-  // current_caminfo_->distortion_model = "plumb_bob";
-  // current_caminfo_->d = {0.0};
-  // current_caminfo_->k = {300.0, 0.0, 640, 0.0, 300.0, 360.0, 0.0, 0.0, 1.0};
-  // current_caminfo_->r = {1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0};
-  // current_caminfo_->p = {300.0, 0.0, 640, 0.0, 0.0, 300.0, 360.0, 0.0, 0.0, 0.0, 1.0, 0.0};
+  video_publisher_->setCameraInfo(nullptr);
 
   std::string topic = "unknown";
   if (caminfo_sub_) {
@@ -466,57 +382,22 @@ void CameraPub::clear()
             QString::fromStdString(topic) +
             "].  Topic may not exist.");
   // setStatus(StatusProperty::Warn, "Camera Info", "No CameraInfo received");
-
-  camera_->setPosition(Ogre::Vector3(999999, 999999, 999999));
+  camera_node_->setPosition(Ogre::Vector3(999999, 999999, 999999));
 }
 
-void CameraPub::update(float wall_dt, float ros_dt)
+void CameraPub::update(float /*wall_dt*/, float /*ros_dt*/)
 {
-#if 0
-  try
-  {
-#endif
-  {
-    caminfo_ok_ = updateCamera();
-    force_render_ = false;
-  }
-
-#if 0
-  }
-  catch (UnsupportedImageEncoding& e)
-  {
-    setStatus(StatusProperty::Error, "Image", e.what());
-  }
-#endif
-
-  // if (caminfo_sub_.getNumPublishers() == 0)
-  // {
-  //   setStatus(StatusProperty::Warn, "Camera Info",
-  //             "No publishers on [" +
-  //              QString::fromStdString(caminfo_sub_.getTopic()) +
-  //              "].  Topic may not exist.");
-  // }
-  render_texture_->update();
-}
-
-bool CameraPub::updateCamera()
-{
-  sensor_msgs::msg::CameraInfo::SharedPtr info;
-  {
-    boost::mutex::scoped_lock lock(caminfo_mutex_);
-    info = current_caminfo_;
-  }
-
+  auto info = video_publisher_->cameraInfo();
   if (!info)
   {
-    RCLCPP_DEBUG(nh_->get_logger(), "NO CAMERA INFO! RETURNING...");
-    return false;
+    return;
   }
 
   if (!validateFloats(*info))
   {
-    setStatus(rviz_common::properties::StatusProperty::Error, "Camera Info", "Contains invalid floating point values (nans or infs)");
-    return false;
+    setStatus(rviz_common::properties::StatusProperty::Error,
+      "Camera Info", "Contains invalid floating point values (nans or infs)");
+    return;
   }
 
   // if we're in 'exact' time mode, only show image if the time is exactly right
@@ -527,11 +408,8 @@ bool CameraPub::updateCamera()
     std::ostringstream s;
     s << "Time-syncing active and no info at timestamp " << (rviz_time.nanoseconds() / 1e9) << ".";
     setStatus(rviz_common::properties::StatusProperty::Warn, "Time", s.str().c_str());
-    return false;
+    return;
   }
-
-  RCLCPP_DEBUG(nh_->get_logger(), "UPDATING TEXTURES....");
-
 
   // TODO(lucasw) this will make the img vs. texture size code below unnecessary
   if ((info->width != render_texture_->getWidth()) ||
@@ -574,11 +452,9 @@ bool CameraPub::updateCamera()
     if (has_problems)
     {
       setStatus(rviz_common::properties::StatusProperty::Error, "getTransform", error.c_str());
-      return false;
+      return;
     }
   }
-
-  // printf( "CameraPub:updateCamera(): pos = %.2f, %.2f, %.2f.\n", position.x, position.y, position.z );
 
   // convert vision (Z-forward) frame to ogre frame (Z-out)
   orientation = orientation * Ogre::Quaternion(Ogre::Degree(180), Ogre::Vector3::UNIT_X);
@@ -603,7 +479,7 @@ bool CameraPub::updateCamera()
   {
     setStatus(rviz_common::properties::StatusProperty::Error, "Camera Info",
               "Could not determine width/height of image due to malformed CameraInfo (either width or height is 0)");
-    return false;
+    return;
   }
 
   double fx = info->p[0];
@@ -643,14 +519,14 @@ bool CameraPub::updateCamera()
   {
     setStatus(rviz_common::properties::StatusProperty::Error, "Camera Info",
         "CameraInfo/P resulted in an invalid position calculation (nans or infs)");
-    return false;
+    return;
   }
 
   const float near_clip_distance = near_clip_property_->getFloat();
 
-  camera_->setPosition(position);
-  camera_->setOrientation(orientation);
   camera_->setNearClipDistance(near_clip_distance);
+  camera_node_->setPosition(position);
+  camera_node_->setOrientation(orientation);
 
   // calculate the projection matrix
   double cx = info->p[2];
@@ -676,28 +552,26 @@ bool CameraPub::updateCamera()
   camera_->setCustomProjectionMatrix(true, proj_matrix);
 
   setStatus(rviz_common::properties::StatusProperty::Ok, "Camera Info", "OK");
+  setStatus(rviz_common::properties::StatusProperty::Ok, "Time", "ok");
+
+  force_render_ = false;
+  render_texture_->update();
 
 #if 0
   static Axes* debug_axes = new Axes(scene_manager_, 0, 0.2, 0.01);
   debug_axes->setPosition(position);
   debug_axes->setOrientation(orientation);
 #endif
-
-  setStatus(rviz_common::properties::StatusProperty::Ok, "Time", "ok");
-
-  return true;
 }
 
 void CameraPub::caminfoCallback(sensor_msgs::msg::CameraInfo::SharedPtr msg)
 {
-  boost::mutex::scoped_lock lock(caminfo_mutex_);
-  current_caminfo_ = msg;
-  new_caminfo_ = true;
+  video_publisher_->setCameraInfo(msg);
 }
 
 void CameraPub::fixedFrameChanged()
 {
-  std::string targetFrame = fixed_frame_.toStdString();
+  // std::string targetFrame = fixed_frame_.toStdString();
   rviz_common::Display::fixedFrameChanged();
 }
 
