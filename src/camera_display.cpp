@@ -370,7 +370,8 @@ void CameraPub::clear()
   force_render_ = true;
   context_->queueRender();
 
-  video_publisher_->setCameraInfo(nullptr);
+  // NOTE: Retain last camera info and don't clear it
+  // video_publisher_->setCameraInfo(nullptr);
 
   std::string topic = "unknown";
   if (caminfo_sub_) {

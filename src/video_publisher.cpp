@@ -51,6 +51,7 @@ VideoPublisher::VideoPublisher(const rclcpp::Node::SharedPtr &node) :
 
 std::string VideoPublisher::getTopic()
 {
+  std::lock_guard<std::mutex> lock(mutex_);
   return pub_.getTopic();
 }
 
@@ -61,19 +62,19 @@ sensor_msgs::msg::CameraInfo::SharedPtr VideoPublisher::cameraInfo() const {
 
 bool VideoPublisher::isActive()
 {
-  bool ok = false;
-  {
-    std::lock_guard<std::mutex> lock(mutex_);
-    ok = camera_info_ != nullptr && !camera_info_->header.frame_id.empty();
-  }
-
-  return !getTopic().empty() && ok;
+  std::lock_guard<std::mutex> lock(mutex_);
+  return !pub_.getTopic().empty() &&
+         camera_info_ != nullptr &&
+         !camera_info_->header.frame_id.empty() &&
+         camera_publsher_initialized;
 }
 
 void VideoPublisher::shutdown()
 {
-  if (!getTopic().empty()) {
+  std::lock_guard<std::mutex> lock(mutex_);
+  if (!pub_.getTopic().empty()) {
     pub_.shutdown();
+    camera_publsher_initialized = false;
   }
 }
 
@@ -85,7 +86,9 @@ void VideoPublisher::setCameraInfo(const sensor_msgs::msg::CameraInfo::SharedPtr
 
 void VideoPublisher::advertise(std::string topic)
 {
+  std::lock_guard<std::mutex> lock(mutex_);
   pub_ = it_.advertiseCamera(topic, 1);
+  camera_publsher_initialized = true;
 }
 
 bool VideoPublisher::publishFrame(Ogre::RenderTexture * render_object, int encoding_option) {

@@ -61,6 +61,7 @@ public:
 
 private:
   mutable std::mutex mutex_;
+  bool camera_publsher_initialized{false};
   rclcpp::Node::SharedPtr nh_;
   image_transport::ImageTransport it_;
   image_transport::CameraPublisher pub_;
